@@ -11,6 +11,10 @@ from torch.utils.cpp_extension import (
     IS_WINDOWS,
 )
 
+# Force use of clang instead of gcc
+os.environ["CC"] = "clang"
+os.environ["CXX"] = "clang++"
+
 
 def append_nvcc_threads(nvcc_extra_args):
     nvcc_threads = os.getenv("NVCC_THREADS") or "32"
@@ -40,7 +44,7 @@ this_dir = os.path.dirname(os.path.abspath(__file__))
 if IS_WINDOWS:
     cxx_args = ["/O2", "/std:c++17", "/DNDEBUG", "/W0"]
 else:
-    cxx_args = ["-O3", "-std=c++17", "-DNDEBUG", "-Wno-deprecated-declarations"]
+    cxx_args = ["-std=c++17", "-Wno-deprecated-declarations"]
 
 ext_modules = []
 ext_modules.append(
@@ -56,9 +60,9 @@ ext_modules.append(
             "cxx": cxx_args + get_features_args(),
             "nvcc": append_nvcc_threads(
                 [
-                    "-O3",
+                    # "-O3",
                     "-std=c++17",
-                    "-DNDEBUG",
+                    # "-DNDEBUG",
                     "-D_USE_MATH_DEFINES",
                     "-Wno-deprecated-declarations",
                     "-U__CUDA_NO_HALF_OPERATORS__",
@@ -68,10 +72,12 @@ ext_modules.append(
                     "--expt-relaxed-constexpr",
                     "--expt-extended-lambda",
                     "--use_fast_math",
-                    "--ptxas-options=-v,--register-usage-level=10"
+                    "--ptxas-options=-v,--register-usage-level=10",
+                    "-allow-unsupported-compiler",
                 ]
                 + cc_flag_sm90
-            ) + get_features_args(),
+            )
+            + get_features_args(),
         },
         include_dirs=[
             Path(this_dir) / "csrc" / "sm90",
@@ -105,6 +111,7 @@ ext_modules.append(
                     "--use_fast_math",
                     "-lineinfo",
                     "--ptxas-options=--verbose,--register-usage-level=10,--warn-on-local-memory-usage",
+                    "-allow-unsupported-compiler",
                 ]
                 + cc_flag_sm100
             ),
@@ -119,18 +126,18 @@ ext_modules.append(
 
 
 try:
-    cmd = ['git', 'rev-parse', '--short', 'HEAD']
-    rev = '+' + subprocess.check_output(cmd).decode('ascii').rstrip()
+    cmd = ["git", "rev-parse", "--short", "HEAD"]
+    rev = "+" + subprocess.check_output(cmd).decode("ascii").rstrip()
 except Exception as _:
     now = datetime.now()
     date_time_str = now.strftime("%Y-%m-%d-%H-%M-%S")
-    rev = '+' + date_time_str
+    rev = "+" + date_time_str
 
 
 setup(
     name="flash_mla",
     version="1.0.0" + rev,
-    packages=find_packages(include=['flash_mla']),
+    packages=find_packages(include=["flash_mla"]),
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension},
 )

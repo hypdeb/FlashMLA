@@ -60,7 +60,7 @@ def test_flash_mla(b, s_q, mean_sk, h_q, h_kv, d, dv, causal, varlen):
     ).view(b, max_seqlen_pad // block_size)
     blocked_k = torch.randn(block_table.numel(), block_size, h_kv, d)
     for i in range(b):
-        blocked_k.view(b, max_seqlen_pad, h_kv, d)[i, cache_seqlens[i].item():] = (
+        blocked_k.view(b, max_seqlen_pad, h_kv, d)[i, cache_seqlens[i].item() :] = (
             float("nan")
         )
     blocked_v = blocked_k[..., :dv]
@@ -109,9 +109,7 @@ def test_flash_mla(b, s_q, mean_sk, h_q, h_kv, d, dv, causal, varlen):
     bytes = (total_seqlens * h_kv * d + b * s_q * h_q * d + b * s_q * h_q * dv) * (
         torch.finfo(q.dtype).bits // 8
     )
-    print(
-        f"{t:.3f} ms, {FLOPS / 10 ** 9 / t:.0f} TFLOPS, {bytes / 10 ** 6 / t:.0f} GB/s"
-    )
+    print(f"{t:.3f} ms, {FLOPS / 10**9 / t:.0f} TFLOPS, {bytes / 10**6 / t:.0f} GB/s")
 
 
 def main(torch_dtype):
@@ -123,15 +121,16 @@ def main(torch_dtype):
     random.seed(0)
 
     h_kv = 1
-    d, dv = 576, 512
     causal = True
 
-    for b in [128]:
-        for s in [4096, 8192, 16384]:
-            for h_q in [16, 32, 64, 128]:  # TP = 8, 4, 2, 1
-                for s_q in [1, 2]:  # MTP = 1, 2
-                    for varlen in [False, True]:
-                        test_flash_mla(b, s_q, s, h_q, h_kv, d, dv, causal, varlen)
+    for d, dv in [(320, 256)]:
+        # for d, dv in [(576, 512), (320, 256)]:
+        for b in [128]:
+            for s in [4096, 8192, 16384]:
+                for h_q in [16, 32, 64, 128]:  # TP = 8, 4, 2, 1
+                    for s_q in [1, 2]:  # MTP = 1, 2
+                        for varlen in [False, True]:
+                            test_flash_mla(b, s_q, s, h_q, h_kv, d, dv, causal, varlen)
 
 
 if __name__ == "__main__":

@@ -105,8 +105,6 @@ mha_fwd_kvcache_mla(
     const int seqlen_q_ori = sizes[1];
     const int num_heads_q = sizes[2];
     const int head_size_k = sizes[3];
-    TORCH_CHECK(head_size_k == 576, "Only head_size_k == 576 is supported");
-    TORCH_CHECK(head_size_v == 512, "Only head_size_v == 576 is supported");
 
     const int max_num_blocks_per_seq = block_table.size(1);
     const int num_blocks = kcache.size(0);
@@ -130,7 +128,7 @@ mha_fwd_kvcache_mla(
     TORCH_CHECK(tile_scheduler_metadata.size(1) == TileSchedulerMetaDataSize);
     CHECK_SHAPE(num_splits, batch_size+1);
 
-    at::cuda::CUDAGuard device_guard{(char)q.get_device()};
+    at::cuda::CUDAGuard device_guard{(char)q.get_device()}; //??
 
     auto opts = q.options();
     at::Tensor out = torch::empty({batch_size, q_seq_per_hk, num_heads, head_size_v}, opts);
@@ -186,16 +184,44 @@ mha_fwd_kvcache_mla(
     params.oaccum_ptr = out_accum.data_ptr();
 
     auto stream = at::cuda::getCurrentCUDAStream().stream();
-    TORCH_CHECK(head_size_k == 576);
-    if (q_dtype == torch::kBFloat16) {
-        run_flash_splitkv_mla_kernel<cutlass::bfloat16_t>(params, stream);
-        run_flash_mla_combine_kernel<cutlass::bfloat16_t>(params, stream);
-    } else if (q_dtype == torch::kHalf) {
+    constexpr int mmaTileSize = 64;
+    TORCH_CHECK(head_size_k % mmaTileSize == 0);
+    if (q_dtype == torch::kBFloat16)
+    {
+        if (params.d == 576 && params.d_v == 512){
+            run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(params, stream);
+            run_flash_mla_combine_kernel<cutlass::bfloat16_t>(params, stream);
+        }
+        else if (params.d == 320 && params.d_v == 256)
+        {
+            run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 320, 256>(params, stream);
+            run_flash_mla_combine_kernel<cutlass::bfloat16_t>(params, stream);
+        }
+        else
+        {
+            throw std::runtime_error("Unsupported FlashMLA configuration");
+        }
+    }
+    else if (q_dtype == torch::kHalf)
+    {
+        
 #ifdef FLASH_MLA_DISABLE_FP16
         TORCH_CHECK(false, "FlashMLA is compiled with -DFLASH_MLA_DISABLE_FP16. Please remove this flag from your environment and re-compile FlashMLA.");
 #else
-        run_flash_splitkv_mla_kernel<cutlass::half_t>(params, stream);
-        run_flash_mla_combine_kernel<cutlass::half_t>(params, stream);
+        if (params.d == 576 && params.d_v == 512)
+        {
+            run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(params, stream);
+            run_flash_mla_combine_kernel<cutlass::half_t>(params, stream);
+        }
+        else if (params.d == 320 && params.d_v == 256)
+        {
+            run_flash_splitkv_mla_kernel<cutlass::half_t, 320, 256>(params, stream);
+            run_flash_mla_combine_kernel<cutlass::half_t>(params, stream);
+        }
+        else
+        {
+            throw std::runtime_error("Unsupported FlashMLA configuration");
+        }
 #endif
     } else {
         TORCH_CHECK(false, "Unsupported tensor dtype for query");
