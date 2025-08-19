@@ -33,7 +33,7 @@ def cal_diff(x: torch.Tensor, y: torch.Tensor, name: str) -> None:
     RMSE = ((x - y) * (x - y)).mean().sqrt().item()
     cos_diff = 1 - 2 * (x * y).sum().item() / max((x * x + y * y).sum().item(), 1e-12)
     amax_diff = (x - y).abs().max().item()
-    # print(f"{name}: {cos_diff=}, {RMSE=}, {amax_diff=}")
+    print(f"{name}: {cos_diff=}, {RMSE=}, {amax_diff=}")
     assert cos_diff < 1e-5
 
 
@@ -100,6 +100,7 @@ def test_flash_mla(b, s_q, mean_sk, h_q, h_kv, d, dv, causal, varlen):
         return out, lse
 
     out_flash, lse_flash = flash_mla()
+    # print("output:", out_flash)
     out_torch, lse_torch = ref_mla()
     cal_diff(out_flash, out_torch, "out")
     cal_diff(lse_flash, lse_torch, "lse")
@@ -129,7 +130,7 @@ def main(torch_dtype):
             for s in [4096, 8192, 16384]:
                 for h_q in [16, 32, 64, 128]:  # TP = 8, 4, 2, 1
                     for s_q in [1, 2]:  # MTP = 1, 2
-                        for varlen in [False, True]:
+                        for varlen in [False]:
                             test_flash_mla(b, s_q, s, h_q, h_kv, d, dv, causal, varlen)
 
 

@@ -307,8 +307,8 @@ __forceinline__ __device__ void warpgroup_cooperative_qkt_gemm_no_pipeline(
 ) {
     TiledMMA tiled_mma = (typename T::TiledMMA_QK_sQ){};
     ThrMMA thr_mma = tiled_mma.get_slice(idx_in_warpgroup);
-    Tensor thr_mma_sQ = thr_mma.partition_fragment_A(sQ);	// (MMA, 1, 576/16=36)
-    Tensor thr_mma_sKV = thr_mma.partition_fragment_B(sKV);	// (MMA, 1, 576/16=36)
+    Tensor thr_mma_sQ = thr_mma.partition_fragment_A(sQ);	// (MMA, 1, HEAD_DIM_K/16)
+    Tensor thr_mma_sKV = thr_mma.partition_fragment_B(sKV);	// (MMA, 1, HEAD_DIM_K/16)
     gemm<true, -1>(tiled_mma, thr_mma_sQ, thr_mma_sKV, rP);
 }
 
@@ -624,7 +624,7 @@ __forceinline__ __device__ void fill_oob_V(
         make_smem_ptr((int64_t*)(sV.data().get().get())),
         tile_to_shape(
             GMMA::Layout_MN_SW128_Atom<cute::int64_t>{},
-            Shape<Int<256/(64/16)>, Int<T::PAGE_BLOCK_SIZE>>{},
+            Shape<Int<T::HEAD_DIM_V/2/(64/16)>, Int<T::PAGE_BLOCK_SIZE>>{},
             LayoutRight{}
         )
     );
@@ -710,14 +710,14 @@ __forceinline__ __device__ void store_o_split(
 ) {
     // Should save the result to OAccum
     Tensor sOutputBuf = make_tensor(make_smem_ptr((float*)sO_addr), Layout<
-        Shape<_64, _512>,
-        Stride<Int<520>, _1>	// We use stride = 520 here to avoid bank conflict
+        Shape<_64, Int<T::HEAD_DIM_V>>,
+        Stride<Int<T::HEAD_DIM_V + (T::HEAD_DIM_V / 64)>, _1>	// We use this stride here to avoid bank conflicts.
     >{});
 
     CUTLASS_PRAGMA_UNROLL
     for (int idx = 0; idx < size(rO); idx += 2) {
         int row = (idx_in_warpgroup/32)*16 + (idx_in_warpgroup%32/4) + (idx%4 >= 2 ? 8 : 0);
-        int col = warpgroup_idx*256 + (idx_in_warpgroup%4)*2 + idx/4*8;
+        int col = warpgroup_idx*256 + (idx_in_warpgroup%4)*2 + idx/4*8; // 256 here is 8 warps times 32 threads per warp.
         *(float2*)((float*)sO_addr + sOutputBuf.layout()(row, col)) = float2 {
             rO(idx) / rL[idx%4 >= 2],
             rO(idx+1) / rL[idx%4 >= 2],
@@ -825,7 +825,7 @@ __forceinline__ __device__ void wg0_subroutine(
     Tensor sV0L = get_half_V<T, 0>(sK0);
     Tensor sV1L = get_half_V<T, 0>(sK1);
 
-    Tensor rPb = make_tensor<T::InputT>(Shape<Shape<_2, _2, _2>, _1, Int<countFirstHalfTiles>>{}); //FIXME: I wonder about this 4, it might be half the tile count.
+    Tensor rPb = make_tensor<T::InputT>(Shape<Shape<_2, _2, _2>, _1, _4>{});
     // Calc P0 = softmax(P0)
     wg0_bunch_0<T, IS_BLK0_LAST||IS_BLK1_LAST>(rPb, rP0, rO0, sScale0, sM, rL, rRightBorderForQSeq, params.scale_softmax_log2, start_token_idx, idx_in_warpgroup);
     NamedBarrier::arrive(T::NUM_THREADS, NamedBarriers::sScale0Ready);
@@ -1038,7 +1038,9 @@ flash_fwd_splitkv_mla_kernel(__grid_constant__ const Flash_fwd_mla_params params
     Tensor sP0 = make_tensor(make_smem_ptr(plan.smem_sP0.data()), (typename T::SmemLayoutP0){});
 
     // SUS: what is this _8?
-    Tensor sP1 = flat_divide(sQ, Shape<Int<T::BLOCK_SIZE_M>, Int<T::PAGE_BLOCK_SIZE>>{})(_, _, _0{}, _8{}); // Overlap with sQ's 8-th tile
+    constexpr int lastTileIndex = T::NUM_MMA_TILES - 1;
+    constexpr auto cuteLastTileIndex = Int<lastTileIndex>{};
+    Tensor sP1 = flat_divide(sQ, Shape<Int<T::BLOCK_SIZE_M>, Int<T::PAGE_BLOCK_SIZE>>{})(_, _, _0{}, cuteLastTileIndex); // Overlap with sQ's 8-th tile
     Tensor sM = make_tensor(make_smem_ptr(plan.smem_sM.data()), make_shape(Int<T::BLOCK_SIZE_M>{}));
     Tensor sL_reduction_wksp = make_tensor(make_smem_ptr(plan.sL_reduction_wksp.data()), make_shape(Int<2*T::BLOCK_SIZE_M>{}));
     Tensor sScale0 = make_tensor(make_smem_ptr(plan.smem_sScale0.data()), make_shape(Int<T::BLOCK_SIZE_M>{}));
