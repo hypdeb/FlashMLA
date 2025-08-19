@@ -188,9 +188,10 @@ mha_fwd_kvcache_mla(
     TORCH_CHECK(head_size_k % mmaTileSize == 0);
     if (q_dtype == torch::kBFloat16)
     {
-        if (params.d == 576 && params.d_v == 512){
-            run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(params, stream);
-            run_flash_mla_combine_kernel<cutlass::bfloat16_t>(params, stream);
+        if (params.d == 576 && params.d_v == 512)
+        {
+            // run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(params, stream);
+            // run_flash_mla_combine_kernel<cutlass::bfloat16_t>(params, stream);
         }
         else if (params.d == 320 && params.d_v == 256)
         {
@@ -210,8 +211,8 @@ mha_fwd_kvcache_mla(
 #else
         if (params.d == 576 && params.d_v == 512)
         {
-            run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(params, stream);
-            run_flash_mla_combine_kernel<cutlass::half_t>(params, stream);
+            // run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(params, stream);
+            // run_flash_mla_combine_kernel<cutlass::half_t>(params, stream);
         }
         else if (params.d == 320 && params.d_v == 256)
         {

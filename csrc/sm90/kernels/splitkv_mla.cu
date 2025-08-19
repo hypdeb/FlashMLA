@@ -743,6 +743,7 @@ __forceinline__ __device__ void launch_q_copy(
     int batch_idx,
     int m_block_idx,
     int k_head_idx,
+    int head_dim_k,
     Tensor0 &sQ,
     TMABarrier* barrier_Q
 ) {
@@ -755,7 +756,7 @@ __forceinline__ __device__ void launch_q_copy(
             thr_tma.partition_S(my_tma_gQ),
             thr_tma.partition_D(sQ)
         );
-        barrier_Q->arrive_and_expect_tx(64*576*2);
+        barrier_Q->arrive_and_expect_tx(64*head_dim_k*2);
     }
 }
 
@@ -824,7 +825,7 @@ __forceinline__ __device__ void wg0_subroutine(
     Tensor sV0L = get_half_V<T, 0>(sK0);
     Tensor sV1L = get_half_V<T, 0>(sK1);
 
-    Tensor rPb = make_tensor<T::InputT>(Shape<Shape<_2, _2, _2>, _1, _4>{}); //FIXME: I wonder about this 4, it might be half the tile count.
+    Tensor rPb = make_tensor<T::InputT>(Shape<Shape<_2, _2, _2>, _1, Int<countFirstHalfTiles>>{}); //FIXME: I wonder about this 4, it might be half the tile count.
     // Calc P0 = softmax(P0)
     wg0_bunch_0<T, IS_BLK0_LAST||IS_BLK1_LAST>(rPb, rP0, rO0, sScale0, sM, rL, rRightBorderForQSeq, params.scale_softmax_log2, start_token_idx, idx_in_warpgroup);
     NamedBarrier::arrive(T::NUM_THREADS, NamedBarriers::sScale0Ready);
@@ -932,6 +933,7 @@ __forceinline__ __device__ void wg1_subroutine(
     int nxt_block0_index = GET_BLOCK_INDEX(block_idx+2);
     int nxt_block1_index = GET_BLOCK_INDEX(block_idx+3);
 
+    // SUS: what about this _4 here?
     Tensor rP1b = make_tensor<T::InputT>(Shape<Shape<_2, _2, _2>, _1, _4>{});
     
     Tensor sV0R = get_half_V<T, 1>(sK0);
@@ -1087,7 +1089,7 @@ flash_fwd_splitkv_mla_kernel(__grid_constant__ const Flash_fwd_mla_params params
     int begin_n_split_idx = *(tile_scheduler_metadata_ptr + 4);
 
     // Copy the first Q
-    launch_q_copy<T>(tma_params, begin_idx, m_block_idx, k_head_idx, sQ, barrier_Q);
+    launch_q_copy<T>(tma_params, begin_idx, m_block_idx, k_head_idx, params.d, sQ, barrier_Q);
 
     #pragma unroll 1
     for (int batch_idx = begin_idx; batch_idx <= end_idx; ++batch_idx) {
@@ -1283,7 +1285,7 @@ flash_fwd_splitkv_mla_kernel(__grid_constant__ const Flash_fwd_mla_params params
 
         // Copy Q for the next batch
         if (batch_idx+1 <= end_idx) {
-            launch_q_copy<T>(tma_params, batch_idx+1, m_block_idx, k_head_idx, sQ, barrier_Q);
+            launch_q_copy<T>(tma_params, batch_idx+1, m_block_idx, k_head_idx, params.d, sQ, barrier_Q);
         } else {
             // Allow the next kernel (the combine kernel) to launch
             // The next kernel MUST be the combine kernel
@@ -1410,10 +1412,10 @@ void run_flash_splitkv_mla_kernel(Flash_fwd_mla_params &params, cudaStream_t str
     CHECK_CUDA_KERNEL_LAUNCH();
 }
 
-template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
+// template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
 template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 320, 256>(Flash_fwd_mla_params &params, cudaStream_t stream);
 
 #ifndef FLASH_MLA_DISABLE_FP16
-template void run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
+// template void run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
 template void run_flash_splitkv_mla_kernel<cutlass::half_t, 320, 256>(Flash_fwd_mla_params &params, cudaStream_t stream);
 #endif
