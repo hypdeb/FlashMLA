@@ -1040,7 +1040,7 @@ flash_fwd_splitkv_mla_kernel(__grid_constant__ const Flash_fwd_mla_params params
     // SUS: what is this _8?
     constexpr int lastTileIndex = T::NUM_MMA_TILES - 1;
     constexpr auto cuteLastTileIndex = Int<lastTileIndex>{};
-    Tensor sP1 = flat_divide(sQ, Shape<Int<T::BLOCK_SIZE_M>, Int<T::PAGE_BLOCK_SIZE>>{})(_, _, _0{}, cuteLastTileIndex); // Overlap with sQ's 8-th tile
+    Tensor sP1 = flat_divide(sQ, Shape<Int<T::BLOCK_SIZE_M>, Int<T::PAGE_BLOCK_SIZE>>{})(_, _, _0{}, cuteLastTileIndex); // Overlap with sQ's last tile
     Tensor sM = make_tensor(make_smem_ptr(plan.smem_sM.data()), make_shape(Int<T::BLOCK_SIZE_M>{}));
     Tensor sL_reduction_wksp = make_tensor(make_smem_ptr(plan.sL_reduction_wksp.data()), make_shape(Int<2*T::BLOCK_SIZE_M>{}));
     Tensor sScale0 = make_tensor(make_smem_ptr(plan.smem_sScale0.data()), make_shape(Int<T::BLOCK_SIZE_M>{}));
@@ -1414,10 +1414,10 @@ void run_flash_splitkv_mla_kernel(Flash_fwd_mla_params &params, cudaStream_t str
     CHECK_CUDA_KERNEL_LAUNCH();
 }
 
-// template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
+template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
 template void run_flash_splitkv_mla_kernel<cutlass::bfloat16_t, 320, 256>(Flash_fwd_mla_params &params, cudaStream_t stream);
 
 #ifndef FLASH_MLA_DISABLE_FP16
-// template void run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
+template void run_flash_splitkv_mla_kernel<cutlass::half_t, 576, 512>(Flash_fwd_mla_params &params, cudaStream_t stream);
 template void run_flash_splitkv_mla_kernel<cutlass::half_t, 320, 256>(Flash_fwd_mla_params &params, cudaStream_t stream);
 #endif

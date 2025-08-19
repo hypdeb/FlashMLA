@@ -46,12 +46,12 @@ def test_flash_mla(b, s_q, mean_sk, h_q, h_kv, d, dv, causal, varlen):
     cache_seqlens = torch.full((b,), mean_sk, dtype=torch.int32)
     if varlen:
         for i in range(b):
-            cache_seqlens[i] = max(random.normalvariate(mean_sk, mean_sk / 2), s_q)
+            cache_seqlens[i] = max(random.normalvariate(mean_sk, mean_sk / 16), s_q)
     total_seqlens = cache_seqlens.sum().item()
     mean_seqlens = cache_seqlens.float().mean().int().item()
     max_seqlen = cache_seqlens.max().item()
     max_seqlen_pad = triton.cdiv(max_seqlen, 256) * 256
-    # print(f"{total_seqlens=}, {mean_seqlens=}, {max_seqlen=}")
+    print(f"{total_seqlens=}, {mean_seqlens=}, {max_seqlen=}")
 
     q = torch.randn(b, s_q, h_q, d)
     block_size = 64
@@ -125,12 +125,12 @@ def main(torch_dtype):
     causal = True
 
     for d, dv in [(320, 256)]:
-        # for d, dv in [(576, 512), (320, 256)]:
+        # for d, dv in [(576, 512)]:
         for b in [128]:
             for s in [4096, 8192, 16384]:
                 for h_q in [16, 32, 64, 128]:  # TP = 8, 4, 2, 1
                     for s_q in [1, 2]:  # MTP = 1, 2
-                        for varlen in [False]:
+                        for varlen in [False, True]:
                             test_flash_mla(b, s_q, s, h_q, h_kv, d, dv, causal, varlen)
 
 
