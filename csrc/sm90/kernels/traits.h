@@ -10,14 +10,15 @@
 using TMABarrier = cutlass::arch::ClusterTransactionBarrier;
 using namespace cute;
 
-template<typename InputT_>
+template<typename InputT_, int HEAD_DIM_K_, int HEAD_DIM_V_>
 struct Traits {
     using InputT = InputT_;
     
     static constexpr int BLOCK_SIZE_M = Config::BLOCK_SIZE_M;
     static constexpr int PAGE_BLOCK_SIZE = Config::PAGE_BLOCK_SIZE;
-    static constexpr int HEAD_DIM_K = Config::HEAD_DIM_K;
-    static constexpr int HEAD_DIM_V = Config::HEAD_DIM_V;
+    static constexpr int HEAD_DIM_K = HEAD_DIM_K_;
+    static constexpr int HEAD_DIM_V = HEAD_DIM_V_;
+    static constexpr int NUM_MMA_TILES = HEAD_DIM_K / 64;
 
     static constexpr int NUM_THREADS = 256;
 
@@ -77,8 +78,8 @@ struct Traits {
         cute::array_aligned<float, 2*BLOCK_SIZE_M> sL_reduction_wksp;
         cute::array_aligned<float, BLOCK_SIZE_M> smem_sScale0;
         cute::array_aligned<float, BLOCK_SIZE_M> smem_sScale1;
-        TMABarrier barriers_K0[HEAD_DIM_K/64];
-        TMABarrier barriers_K1[HEAD_DIM_K/64];
+        TMABarrier barriers_K0[NUM_MMA_TILES];
+        TMABarrier barriers_K1[NUM_MMA_TILES];
         TMABarrier barrier_Q;
     };
 
