@@ -717,8 +717,8 @@ __forceinline__ __device__ void store_o_split(
 
     CUTLASS_PRAGMA_UNROLL
     for (int idx = 0; idx < size(rO); idx += 2) {
-        int row = (idx_in_warpgroup/32)*16 + (idx_in_warpgroup%32/4) + (idx%4 >= 2 ? sMemPadding : 0);
-        int col = warpgroup_idx*T::HEAD_DIM_V/2 + (idx_in_warpgroup%4)*2 + idx/4*sMemPadding;
+        int row = (idx_in_warpgroup/32)*16 + (idx_in_warpgroup%32/4) + (idx%4 >= 2 ? 8 : 0);
+        int col = warpgroup_idx*T::HEAD_DIM_V/2 + (idx_in_warpgroup%4)*2 + idx/4*8;
         *(float2*)((float*)sO_addr + sOutputBuf.layout()(row, col)) = float2 {
             rO(idx) / rL[idx%4 >= 2],
             rO(idx+1) / rL[idx%4 >= 2],

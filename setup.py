@@ -11,7 +11,7 @@ from torch.utils.cpp_extension import (
     IS_WINDOWS,
 )
 
-# Force use of clang instead of gcc
+# GCC hangs / is impractically slow.
 os.environ["CC"] = "clang"
 os.environ["CXX"] = "clang++"
 
@@ -44,7 +44,7 @@ this_dir = os.path.dirname(os.path.abspath(__file__))
 if IS_WINDOWS:
     cxx_args = ["/O2", "/std:c++17", "/DNDEBUG", "/W0"]
 else:
-    cxx_args = ["-std=c++17", "-Wno-deprecated-declarations"]
+    cxx_args = ["-O3", "-std=c++17", "-DNDEBUG", "-Wno-deprecated-declarations"]
 
 ext_modules = []
 ext_modules.append(
@@ -60,9 +60,9 @@ ext_modules.append(
             "cxx": cxx_args + get_features_args(),
             "nvcc": append_nvcc_threads(
                 [
-                    # "-O3",
+                    "-O3",
                     "-std=c++17",
-                    # "-DNDEBUG",
+                    "-DNDEBUG",
                     "-D_USE_MATH_DEFINES",
                     "-Wno-deprecated-declarations",
                     "-U__CUDA_NO_HALF_OPERATORS__",
