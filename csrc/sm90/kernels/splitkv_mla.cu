@@ -709,15 +709,16 @@ __forceinline__ __device__ void store_o_split(
     int idx_in_warpgroup
 ) {
     // Should save the result to OAccum
+    int constexpr sMemPadding = (T::HEAD_DIM_V / 64);
     Tensor sOutputBuf = make_tensor(make_smem_ptr((float*)sO_addr), Layout<
         Shape<_64, Int<T::HEAD_DIM_V>>,
-        Stride<Int<T::HEAD_DIM_V + (T::HEAD_DIM_V / 64)>, _1>	// We use this stride here to avoid bank conflicts.
+        Stride<Int<T::HEAD_DIM_V + sMemPadding>, _1>	// We use this stride here to avoid bank conflicts.
     >{});
 
     CUTLASS_PRAGMA_UNROLL
     for (int idx = 0; idx < size(rO); idx += 2) {
-        int row = (idx_in_warpgroup/32)*16 + (idx_in_warpgroup%32/4) + (idx%4 >= 2 ? 8 : 0);
-        int col = warpgroup_idx*256 + (idx_in_warpgroup%4)*2 + idx/4*8; // 256 here is 8 warps times 32 threads per warp.
+        int row = (idx_in_warpgroup/32)*16 + (idx_in_warpgroup%32/4) + (idx%4 >= 2 ? sMemPadding : 0);
+        int col = warpgroup_idx*T::HEAD_DIM_V/2 + (idx_in_warpgroup%4)*2 + idx/4*sMemPadding;
         *(float2*)((float*)sO_addr + sOutputBuf.layout()(row, col)) = float2 {
             rO(idx) / rL[idx%4 >= 2],
             rO(idx+1) / rL[idx%4 >= 2],
@@ -1037,7 +1038,6 @@ flash_fwd_splitkv_mla_kernel(__grid_constant__ const Flash_fwd_mla_params params
     Tensor sK1 = make_tensor(make_smem_ptr(plan.smem_sK1.data()), (typename T::SmemLayoutK){});
     Tensor sP0 = make_tensor(make_smem_ptr(plan.smem_sP0.data()), (typename T::SmemLayoutP0){});
 
-    // SUS: what is this _8?
     constexpr int lastTileIndex = T::NUM_MMA_TILES - 1;
     constexpr auto cuteLastTileIndex = Int<lastTileIndex>{};
     Tensor sP1 = flat_divide(sQ, Shape<Int<T::BLOCK_SIZE_M>, Int<T::PAGE_BLOCK_SIZE>>{})(_, _, _0{}, cuteLastTileIndex); // Overlap with sQ's last tile

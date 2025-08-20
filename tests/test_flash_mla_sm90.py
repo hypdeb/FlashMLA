@@ -124,9 +124,8 @@ def main(torch_dtype):
     h_kv = 1
     causal = True
 
-    for d, dv in [(320, 256)]:
-        # for d, dv in [(576, 512)]:
-        for b in [128]:
+    for d, dv in [(320, 256), (576, 512)]:
+        for b in [64, 128]:
             for s in [4096, 8192, 16384]:
                 for h_q in [16, 32, 64, 128]:  # TP = 8, 4, 2, 1
                     for s_q in [1, 2]:  # MTP = 1, 2

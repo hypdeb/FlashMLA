@@ -20,6 +20,7 @@ struct Traits {
     static constexpr int HEAD_DIM_V = HEAD_DIM_V_;
     static constexpr int NUM_MMA_TILES = HEAD_DIM_K / 64;
 
+    // 128 threads per warp group, and we would like 2 warp groups. 
     static constexpr int NUM_THREADS = 256;
 
     static_assert(std::is_same_v<InputT, cutlass::bfloat16_t> || std::is_same_v<InputT, cutlass::half_t>);
