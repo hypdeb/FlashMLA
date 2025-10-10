@@ -59,8 +59,6 @@ fwd_kvcache_mla_fp8(
     const int seqlen_q_ori = sizes[1];
     const int num_heads_q = sizes[2];
     const int head_size_k = sizes[3];
-    TORCH_CHECK(head_size_k == 576, "Only head_size_k == 576 is supported");
-    TORCH_CHECK(head_size_v == 512, "Only head_size_v == 512 is supported");
 
     const int max_num_blocks_per_seq = block_table.size(1);
     const int num_blocks = kcache.size(0);
@@ -173,7 +171,13 @@ fwd_kvcache_mla_fp8(
 #ifdef FLASH_MLA_DISABLE_FP8
     TORCH_CHECK(false, "FlashMLA is compiled with -DFLASH_MLA_DISABLE_FP8. Please remove this flag from your environment and re-compile FlashMLA.");
 #else
-    run_mha_fwd_splitkv_mla<cutlass::float_e4m3_t, cutlass::bfloat16_t, 576>(params, stream);
+    if (head_size_k == 576 && head_size_v == 512) {
+        run_mha_fwd_splitkv_mla<cutlass::float_e4m3_t, cutlass::bfloat16_t, 576>(params, stream);
+    } else if (head_size_k == 320 && head_size_v == 256) {
+        run_mha_fwd_splitkv_mla<cutlass::float_e4m3_t, cutlass::bfloat16_t, 320>(params, stream);
+    } else {
+        TORCH_CHECK(false, "Unsupported FlashMLA configuration");
+    }
 #endif
 
     // Reshape outputs back to original format

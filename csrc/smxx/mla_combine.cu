@@ -174,15 +174,13 @@ flash_fwd_mla_combine_kernel(__grid_constant__ const DecodingParams params) {
     }()
 
 
-template<typename ElementT>
+template<typename ElementT, int HeadDimV>
 void run_flash_mla_combine_kernel(DecodingParams &params, cudaStream_t stream) {
-    static constexpr int HEAD_DIM_V = 512;  // Since only this head dimension is supported by Flash MLA
-    FLASH_ASSERT(params.d_v == HEAD_DIM_V);
     MLA_NUM_SPLITS_SWITCH(params.num_sm_parts, NUM_SPLITS, [&] {
         constexpr int BLOCK_SIZE_M = 8;
         constexpr int NUM_THREADS = BLOCK_SIZE_M*32;
         constexpr size_t smem_size = BLOCK_SIZE_M*(NUM_SPLITS+1)*sizeof(float);
-        auto combine_kernel = &flash_fwd_mla_combine_kernel<ElementT, HEAD_DIM_V, BLOCK_SIZE_M, NUM_SPLITS, NUM_THREADS>;
+        auto combine_kernel = &flash_fwd_mla_combine_kernel<ElementT, HeadDimV, BLOCK_SIZE_M, NUM_SPLITS, NUM_THREADS>;
         CHECK_CUDA(cudaFuncSetAttribute(combine_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size));
         // Use cudaLaunchKernelEx to enable PDL (Programmatic Dependent Launch)
         cudaLaunchAttribute attribute[1];
@@ -201,8 +199,10 @@ void run_flash_mla_combine_kernel(DecodingParams &params, cudaStream_t stream) {
     CHECK_CUDA_KERNEL_LAUNCH();
 }
 
-template void run_flash_mla_combine_kernel<cutlass::bfloat16_t>(DecodingParams &params, cudaStream_t stream);
+template void run_flash_mla_combine_kernel<cutlass::bfloat16_t, 512>(DecodingParams &params, cudaStream_t stream);
+template void run_flash_mla_combine_kernel<cutlass::bfloat16_t, 256>(DecodingParams &params, cudaStream_t stream);
 
 #ifndef FLASH_MLA_DISABLE_FP16
-template void run_flash_mla_combine_kernel<cutlass::half_t>(DecodingParams &params, cudaStream_t stream);
+template void run_flash_mla_combine_kernel<cutlass::half_t, 512>(DecodingParams &params, cudaStream_t stream);
+template void run_flash_mla_combine_kernel<cutlass::half_t, 256>(DecodingParams &params, cudaStream_t stream);
 #endif

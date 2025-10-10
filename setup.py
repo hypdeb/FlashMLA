@@ -12,6 +12,10 @@ from torch.utils.cpp_extension import (
     CUDA_HOME
 )
 
+# GCC hangs / is impractically slow.
+os.environ["CC"] = "clang"
+os.environ["CXX"] = "clang++"
+
 
 def is_flag_set(flag: str) -> bool:
     return os.getenv(flag, "FALSE").lower() in ["true", "1", "y", "yes"]
@@ -59,7 +63,6 @@ else:
     cxx_args = ["-O3", "-std=c++17", "-DNDEBUG", "-Wno-deprecated-declarations"]
 
 ext_modules = []
-
 ext_modules.append(
     CUDAExtension(
         name="flash_mla.cuda",
@@ -76,7 +79,7 @@ ext_modules.append(
             "csrc/sm100/prefill/sparse/fwd.cu",
         ],
         extra_compile_args={
-            "cxx": cxx_args + get_features_args() + ["-DNO_PYBIND11=1"],
+            "cxx": cxx_args + get_features_args(),
             "nvcc": [
                 "-O3",
                 "-std=c++17",
@@ -91,7 +94,7 @@ ext_modules.append(
                 "--expt-extended-lambda",
                 "--use_fast_math",
                 "--ptxas-options=-v,--register-usage-level=10",
-                "-DNO_PYBIND11=1"
+                "-allow-unsupported-compiler"
             ] + get_features_args() + get_arch_flags() + get_nvcc_thread_args(),
         },
         include_dirs=[
@@ -126,7 +129,8 @@ ext_modules.append(
                 "--expt-extended-lambda",
                 "--use_fast_math",
                 "--ptxas-options=-v,--register-usage-level=10",
-                "-DNO_PYBIND11=1"
+                "-DNO_PYBIND11=1",
+                "-allow-unsupported-compiler"
             ] + get_features_args() + get_arch_flags() + get_nvcc_thread_args(),
         },
         include_dirs=[
@@ -155,4 +159,3 @@ setup(
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExtension},
 )
-
